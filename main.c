@@ -2,7 +2,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define MAX 5  // Tamanho da fila
+#define MAX_FILA 5   // Tamanho da fila de peças futuras
+#define MAX_PILHA 3  // Tamanho da pilha de reserva
 
 // Estrutura da peça
 typedef struct {
@@ -12,17 +13,28 @@ typedef struct {
 
 // Estrutura da fila circular
 typedef struct {
-    Peca itens[MAX];
+    Peca itens[MAX_FILA];
     int inicio;
     int fim;
     int total;
 } Fila;
+
+// Estrutura da pilha
+typedef struct {
+    Peca itens[MAX_PILHA];
+    int topo;
+} Pilha;
 
 // Inicializa a fila
 void inicializarFila(Fila *f) {
     f->inicio = 0;
     f->fim = 0;
     f->total = 0;
+}
+
+// Inicializa a pilha
+void inicializarPilha(Pilha *p) {
+    p->topo = -1;
 }
 
 // Verifica se a fila está vazia
@@ -32,43 +44,60 @@ int filaVazia(Fila *f) {
 
 // Verifica se a fila está cheia
 int filaCheia(Fila *f) {
-    return f->total == MAX;
+    return f->total == MAX_FILA;
+}
+
+// Verifica se a pilha está cheia
+int pilhaCheia(Pilha *p) {
+    return p->topo == MAX_PILHA - 1;
+}
+
+// Verifica se a pilha está vazia
+int pilhaVazia(Pilha *p) {
+    return p->topo == -1;
 }
 
 // Insere uma nova peça no final da fila (enqueue)
 void enqueue(Fila *f, Peca p) {
-    if(filaCheia(f)) {
-        printf("Fila cheia! Não é possível inserir a peça.\n");
-        return;
-    }
+    if(filaCheia(f)) return;
     f->itens[f->fim] = p;
-    f->fim = (f->fim + 1) % MAX; // Circularidade
+    f->fim = (f->fim + 1) % MAX_FILA;
     f->total++;
 }
 
 // Remove a peça do início da fila (dequeue)
 Peca dequeue(Fila *f) {
-    Peca p = {'X', -1}; // Peça inválida caso a fila esteja vazia
-    if(filaVazia(f)) {
-        printf("Fila vazia! Não há peça para jogar.\n");
-        return p;
-    }
+    Peca p = {'X', -1};
+    if(filaVazia(f)) return p;
     p = f->itens[f->inicio];
-    f->inicio = (f->inicio + 1) % MAX;
+    f->inicio = (f->inicio + 1) % MAX_FILA;
     f->total--;
     return p;
 }
 
-// Mostra o estado atual da fila
-void mostrarFila(Fila *f) {
-    if(filaVazia(f)) {
-        printf("Fila vazia!\n");
-        return;
-    }
-    printf("\nFila de peças:\n");
+// Insere peça na pilha (push)
+void push(Pilha *p, Peca pe) {
+    if(!pilhaCheia(p)) p->itens[++p->topo] = pe;
+}
+
+// Remove peça do topo da pilha (pop)
+Peca pop(Pilha *p) {
+    Peca pe = {'X', -1};
+    if(!pilhaVazia(p)) pe = p->itens[p->topo--];
+    return pe;
+}
+
+// Mostra fila e pilha
+void mostrar(Fila *f, Pilha *p) {
+    printf("\nFila de peças: ");
     for(int i = 0; i < f->total; i++) {
-        int idx = (f->inicio + i) % MAX;
+        int idx = (f->inicio + i) % MAX_FILA;
         printf("[%c %d] ", f->itens[idx].tipo, f->itens[idx].id);
+    }
+
+    printf("\nPilha de reserva (Topo -> Base): ");
+    for(int i = p->topo; i >= 0; i--) {
+        printf("[%c %d] ", p->itens[i].tipo, p->itens[i].id);
     }
     printf("\n");
 }
@@ -82,35 +111,58 @@ Peca gerarPeca(int id) {
     return p;
 }
 
-// Menu principal
 int main() {
     Fila fila;
+    Pilha pilha;
     inicializarFila(&fila);
+    inicializarPilha(&pilha);
+    srand(time(NULL));
+
     int proximoId = 0;
     int opcao;
-    srand(time(NULL)); // Inicializa semente para rand()
 
-    // Preenche a fila inicial
-    for(int i = 0; i < MAX; i++) {
+    // Inicializa fila
+    for(int i = 0; i < MAX_FILA; i++) {
         enqueue(&fila, gerarPeca(proximoId++));
     }
 
     do {
-        mostrarFila(&fila);
+        mostrar(&fila, &pilha);
         printf("\nOpções de ação:\n");
-        printf("1 - Jogar peça (dequeue)\n");
-        printf("2 - Inserir nova peça (enqueue)\n");
+        printf("1 - Jogar peça\n");
+        printf("2 - Reservar peça\n");
+        printf("3 - Usar peça reservada\n");
         printf("0 - Sair\n");
         printf("Escolha: ");
         scanf("%d", &opcao);
 
         switch(opcao) {
-            case 1:
-                dequeue(&fila);
+            case 1: {
+                Peca jogada = dequeue(&fila);
+                printf("Jogou: [%c %d]\n", jogada.tipo, jogada.id);
+                enqueue(&fila, gerarPeca(proximoId++)); // Mantém a fila cheia
                 break;
-            case 2:
-                enqueue(&fila, gerarPeca(proximoId++));
+            }
+            case 2: {
+                if(pilhaCheia(&pilha)) {
+                    printf("Pilha cheia! Não é possível reservar.\n");
+                } else {
+                    Peca reservada = dequeue(&fila);
+                    push(&pilha, reservada);
+                    enqueue(&fila, gerarPeca(proximoId++));
+                    printf("Peça [%c %d] reservada.\n", reservada.tipo, reservada.id);
+                }
                 break;
+            }
+            case 3: {
+                if(pilhaVazia(&pilha)) {
+                    printf("Pilha vazia! Nenhuma peça para usar.\n");
+                } else {
+                    Peca usada = pop(&pilha);
+                    printf("Usou peça reservada: [%c %d]\n", usada.tipo, usada.id);
+                }
+                break;
+            }
             case 0:
                 printf("Saindo do programa...\n");
                 break;
